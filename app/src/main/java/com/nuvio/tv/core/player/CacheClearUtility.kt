@@ -51,18 +51,11 @@ class CacheClearUtility @Inject constructor(
 
             // 2. Clear image cache (Coil)
             imageSuccess = try {
-                val imageLoader = SingletonImageLoader.context?.let {
-                    SingletonImageLoader.get(it)
-                } ?: (context.applicationContext as? coil3.ImageLoaderFactory)?.newImageLoader()
-                imageLoader?.let { loader ->
-                    loader.memoryCache?.clear()
-                    loader.diskCache?.clear()
-                    Log.d(TAG, "Image cache cleared")
-                    true
-                } ?: run {
-                    Log.w(TAG, "No ImageLoader available to clear")
-                    false
-                }
+                val imageLoader = SingletonImageLoader.get(context.applicationContext)
+                imageLoader.memoryCache?.clear()
+                imageLoader.diskCache?.clear()
+                Log.d(TAG, "Image cache cleared")
+                true
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to clear image cache", e)
                 false
