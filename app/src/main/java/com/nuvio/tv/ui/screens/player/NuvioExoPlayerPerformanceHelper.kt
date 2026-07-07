@@ -80,6 +80,15 @@ object NuvioExoPlayerPerformanceHelper {
     @Volatile
     var enableHttp2: Boolean = false
 
+    // Advanced Player Settings (CloudStream-style)
+    /** RAM buffer size in MB from pref_buffer_ram_size. 0 = use Media3 defaults. */
+    @Volatile
+    var bufferRamSizeMb: Int = 0
+
+    /** Buffer duration in ms from pref_buffer_duration_ms. 0 = Auto (Media3 defaults). */
+    @Volatile
+    var bufferDurationMs: Int = 0
+
     /**
      * Updates the performance helper with customized settings from PlayerSettings.
      */
@@ -87,6 +96,10 @@ object NuvioExoPlayerPerformanceHelper {
         val customBuffers = settings.bufferEngineEnabled
         val bufferSettings = settings.bufferSettings
         enableHttp2 = settings.enableHttp2
+
+        // Advanced Player Settings
+        bufferRamSizeMb = settings.bufferRamSizeMb
+        bufferDurationMs = settings.bufferDurationMs
         
         minBufferMs = if (customBuffers) bufferSettings.minBufferMs else DEFAULT_NUVIO_MIN_BUFFER_MS
         maxBufferMs = if (customBuffers) bufferSettings.maxBufferMs else DEFAULT_NUVIO_MAX_BUFFER_MS
@@ -255,28 +268,71 @@ object NuvioExoPlayerPerformanceHelper {
      * or a standard ExoPlayer [DefaultLoadControl] when disabled.
      */
     fun buildLoadControl(context: Context? = null): DefaultLoadControl {
-        return if (enabled) {
-            val targetBufferBytes = (targetBufferSizeMb.toLong() * 1024L * 1024L)
+        // Advanced Player Settings take priority when set (CloudStream-style).
+        // bufferRamSizeMb > 0 → override targetBufferBytes
+        // bufferDurationMs > 0 → override minBufferMs & maxBufferMs, force aggressive forward buffering
+        val effectiveRamBytes = if (bufferRamSizeMb > 0) {
+            (bufferRamSizeMb.toLong() * 1024L * 1024L)
                 .coerceAtMost(Int.MAX_VALUE.toLong())
                 .toInt()
+        } else -1
+
+        val effectiveDurationMs = if (bufferDurationMs > 0) bufferDurationMs else -1
+
+        return if (enabled) {
+            val targetBufferBytes = when {
+                effectiveRamBytes > 0 -> effectiveRamBytes
+                else -> (targetBufferSizeMb.toLong() * 1024L * 1024L)
+                    .coerceAtMost(Int.MAX_VALUE.toLong())
+                    .toInt()
+            }
+            val finalMinBufferMs = when {
+                effectiveDurationMs > 0 -> effectiveDurationMs
+                else -> minBufferMs
+            }
+            val finalMaxBufferMs = when {
+                effectiveDurationMs > 0 -> effectiveDurationMs  // force aggressive: min == max
+                else -> maxBufferMs
+            }
+            val finalBufferForPlaybackMs = when {
+                effectiveDurationMs > 0 -> 2_500  // quick start despite large buffers
+                else -> bufferForPlaybackMs
+            }
             DefaultLoadControl.Builder()
                 .setAllocator(DefaultAllocator(true, DEFAULT_NUVIO_ALLOCATOR_SEGMENT_SIZE, 64, enabled))
                 .setTargetBufferBytes(targetBufferBytes)
                 .setBufferDurationsMs(
-                    minBufferMs,
-                    maxBufferMs,
-                    bufferForPlaybackMs,
+                    finalMinBufferMs,
+                    finalMaxBufferMs,
+                    finalBufferForPlaybackMs,
                     bufferForPlaybackAfterRebufferMs
                 )
                 .setBackBuffer(backBufferMs, true)
                 .build()
         } else {
+            // Non-performance-mode: apply advanced settings on top of stock defaults.
+            val targetBufferBytes = when {
+                effectiveRamBytes > 0 -> effectiveRamBytes
+                else -> 100 * 1024 * 1024
+            }
+            val finalMinBufferMs = when {
+                effectiveDurationMs > 0 -> effectiveDurationMs
+                else -> DefaultLoadControl.DEFAULT_MIN_BUFFER_MS
+            }
+            val finalMaxBufferMs = when {
+                effectiveDurationMs > 0 -> effectiveDurationMs  // force aggressive: min == max
+                else -> 70_000
+            }
+            val finalBufferForPlaybackMs = when {
+                effectiveDurationMs > 0 -> 2_500  // quick start despite large buffers
+                else -> DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS
+            }
             DefaultLoadControl.Builder()
-                .setTargetBufferBytes(100 * 1024 * 1024)
+                .setTargetBufferBytes(targetBufferBytes)
                 .setBufferDurationsMs(
-                    DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
-                    70_000,
-                    DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
+                    finalMinBufferMs,
+                    finalMaxBufferMs,
+                    finalBufferForPlaybackMs,
                     5_000
                 )
                 .build()

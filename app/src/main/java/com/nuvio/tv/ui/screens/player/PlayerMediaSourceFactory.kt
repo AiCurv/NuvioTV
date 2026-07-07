@@ -36,7 +36,10 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
-internal class PlayerMediaSourceFactory(private val context: Context) {
+internal class PlayerMediaSourceFactory(
+    private val context: Context,
+    private val cacheManager: com.nuvio.tv.core.player.CacheManager? = null
+) {
     private var customExtractorsFactory: ExtractorsFactory? = null
     private var customSubtitleParserFactory: SubtitleParser.Factory? = null
     private val loadErrorHandlingPolicy = PlayerLoadErrorHandlingPolicy()
@@ -57,6 +60,8 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
     var vodCacheEnabled: Boolean = PlayerSettings.DEFAULT_VOD_CACHE_ENABLED
     var vodCacheSizeMode: VodCacheSizeMode = PlayerSettings.DEFAULT_VOD_CACHE_SIZE_MODE
     var vodCacheSizeMb: Int = PlayerSettings.DEFAULT_VOD_CACHE_SIZE_MB
+    /** Advanced Player Setting: disk cache size from pref_disk_cache_size. 0 = disabled. */
+    var diskCacheSizeMb: Int = PlayerSettings.DEFAULT_DISK_CACHE_SIZE_MB
 
     // OkHttp client used only by the opt-in parallel-connections path.
     private val playbackHttpClient by lazy {
@@ -149,12 +154,25 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
         }
 
         // 2. VOD disk cache (opt-in).
-        val useVodCache = ENABLE_VOD_CACHE && vodCacheEnabled && !isHls && !isDash && shouldUseVodCache(url)
+        // The advanced "Disk Cache Size" setting (pref_disk_cache_size) takes
+        // priority over the legacy VOD cache toggle when it is set to a
+        // non-zero value. This mirrors Cloudstream's caching logic.
+        val advancedDiskCacheBytes = if (diskCacheSizeMb > 0) {
+            diskCacheSizeMb.toLong() * 1024L * 1024L
+        } else {
+            0L
+        }
+        val useVodCache = (ENABLE_VOD_CACHE && vodCacheEnabled || advancedDiskCacheBytes > 0L) && !isHls && !isDash && shouldUseVodCache(url)
         val previousVodCacheActive = currentVodCacheActive
         currentVodCacheUrl = url
         currentVodCacheResolvedUrl = null
         // Size the cache only when used; 0 means off or not enough free space (skip, stream direct).
-        val vodCacheMaxBytes = if (useVodCache && !isVodCacheDisabled) resolveVodCacheMaxBytes() else 0L
+        val vodCacheMaxBytes = if (useVodCache && !isVodCacheDisabled) {
+            // Advanced setting takes priority; otherwise fall back to legacy resolution.
+            if (advancedDiskCacheBytes > 0L) advancedDiskCacheBytes else resolveVodCacheMaxBytes()
+        } else {
+            0L
+        }
         val vodCacheActive = vodCacheMaxBytes > 0L
 
         if (vodCacheActive) {
@@ -162,7 +180,12 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
         }
 
         val progressiveFactory: DataSource.Factory = if (vodCacheActive) {
-            val cache = getReadySimpleCache(vodCacheMaxBytes) ?: getAnySimpleCache()
+            // Try CacheManager first (advanced player settings path), then legacy.
+            val cache = if (cacheManager != null) {
+                cacheManager.getOrCreateCache(vodCacheMaxBytes)
+            } else {
+                getReadySimpleCache(vodCacheMaxBytes) ?: getAnySimpleCache()
+            }
             if (cache != null) {
                 currentVodCacheActive = true
                 buildVodCacheDataSourceFactory(progressiveUpstreamFactory, cache)
@@ -171,6 +194,11 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
                 progressiveUpstreamFactory
             }
         } else {
+            // If disk cache is disabled (0 bytes) via advanced settings, also
+            // ensure CacheManager releases any previously held cache.
+            if (cacheManager != null && diskCacheSizeMb == 0 && !vodCacheEnabled) {
+                cacheManager.releaseAndDelete()
+            }
             currentVodCacheActive = false
             progressiveUpstreamFactory
         }

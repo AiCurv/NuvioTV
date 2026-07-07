@@ -64,7 +64,12 @@ internal fun LazyListScope.bufferAndNetworkSettingsItems(
     onSetParallelConnectionCount: (Int) -> Unit,
     onSetParallelChunkSizeKb: (Int) -> Unit,
     onSetEnableHttp2: (Boolean) -> Unit,
-    onResetNetworkToDefaults: () -> Unit
+    onResetNetworkToDefaults: () -> Unit,
+    // Advanced Player Settings callbacks
+    onSetDiskCacheSizeMb: (Int) -> Unit = {},
+    onSetBufferRamSizeMb: (Int) -> Unit = {},
+    onSetBufferDurationMs: (Int) -> Unit = {},
+    onClearCache: () -> Unit = {}
 ) {
     val isSupported = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O
 
@@ -562,6 +567,15 @@ internal fun LazyListScope.bufferAndNetworkSettingsItems(
             }
         }
     }
+
+    // ── Advanced Player Settings (CloudStream-style caching & buffering) ──
+    advancedPlayerSettingsItems(
+        playerSettings = playerSettings,
+        onSetDiskCacheSizeMb = onSetDiskCacheSizeMb,
+        onSetBufferRamSizeMb = onSetBufferRamSizeMb,
+        onSetBufferDurationMs = onSetBufferDurationMs,
+        onClearCache = onClearCache
+    )
 }
 
 @Composable

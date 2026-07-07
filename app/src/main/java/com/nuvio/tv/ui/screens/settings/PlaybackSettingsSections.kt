@@ -195,7 +195,12 @@ internal fun PlaybackSettingsSections(
     onSetVodCacheSizeMb: (Int) -> Unit,
     onResetBufferSettingsToDefaults: () -> Unit,
     onSetEnableHttp2: (Boolean) -> Unit,
-    onResetNetworkSettingsToDefaults: () -> Unit
+    onResetNetworkSettingsToDefaults: () -> Unit,
+    // Advanced Player Settings callbacks
+    onSetDiskCacheSizeMb: (Int) -> Unit = {},
+    onSetBufferRamSizeMb: (Int) -> Unit = {},
+    onSetBufferDurationMs: (Int) -> Unit = {},
+    onClearCache: () -> Unit = {}
 ) {
     var generalExpanded by rememberSaveable { mutableStateOf(false) }
     var afrExpanded by rememberSaveable { mutableStateOf(false) }
@@ -722,7 +727,11 @@ internal fun PlaybackSettingsSections(
                     onSetParallelConnectionCount = onSetParallelConnectionCount,
                     onSetParallelChunkSizeKb = onSetParallelChunkSizeKb,
                     onSetEnableHttp2 = onSetEnableHttp2,
-                    onResetNetworkToDefaults = onResetNetworkSettingsToDefaults
+                    onResetNetworkToDefaults = onResetNetworkSettingsToDefaults,
+                    onSetDiskCacheSizeMb = onSetDiskCacheSizeMb,
+                    onSetBufferRamSizeMb = onSetBufferRamSizeMb,
+                    onSetBufferDurationMs = onSetBufferDurationMs,
+                    onClearCache = onClearCache
                 )
             }
         }

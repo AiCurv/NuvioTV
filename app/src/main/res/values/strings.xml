@@ -2823,4 +2823,22 @@
     <string name="stream_test_video_bitrate">Average Video Bitrate: %1$s</string>
     <string name="stream_test_error_connection">Connection failed. The last played stream link may have expired or is unreachable. Please play the video again and retry.</string>
 
+    <!-- Advanced Player Settings -->
+    <string name="advanced_player_settings">Advanced Player Settings</string>
+    <string name="video_cache_on_disk">Video Cache on Disk</string>
+    <string name="video_cache_on_disk_desc">Limits the physical disk space used for caching media chunks</string>
+    <string name="video_buffer_ram_size">Video Buffer Size (RAM Limit)</string>
+    <string name="video_buffer_ram_size_desc">Sets the maximum RAM allocated for video data before it is written to disk or discarded</string>
+    <string name="video_buffer_duration">Video Buffer Length (Time Duration)</string>
+    <string name="video_buffer_duration_desc">Controls how many minutes of video the player attempts to look ahead</string>
+    <string name="cache_cleared">Cache Cleared</string>
+    <string name="cache_cleared_partial">Cache partially cleared</string>
+    <string name="cache_clear_failed">Cache clear failed</string>
+    <string name="clear_video_image_cache">Clear Video &amp; Image Cache</string>
+    <string name="clear_video_image_cache_desc">Wipe all cached video chunks and image data</string>
+    <string name="disk_cache_disabled">Disabled</string>
+    <string name="disk_cache_auto">Auto</string>
+    <string name="buffer_ram_default">Default</string>
+    <string name="buffer_duration_auto">Auto</string>
+
 </resources>

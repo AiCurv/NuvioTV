@@ -291,6 +291,14 @@ data class PlayerSettings(
     val parallelChunkSizeKb: Int = DEFAULT_PARALLEL_CHUNK_SIZE_KB,
     val enableHttp2: Boolean = DEFAULT_ENABLE_HTTP2,
 
+    // Advanced Player Settings (CloudStream-style caching & buffering)
+    /** Disk cache size in MB. 0 = disabled. Maps to `pref_disk_cache_size`. */
+    val diskCacheSizeMb: Int = DEFAULT_DISK_CACHE_SIZE_MB,
+    /** RAM buffer size in MB. 0 = use Media3 defaults. Maps to `pref_buffer_ram_size`. */
+    val bufferRamSizeMb: Int = DEFAULT_BUFFER_RAM_SIZE_MB,
+    /** Buffer look-ahead duration in ms. 0 = Auto (Media3 defaults). Maps to `pref_buffer_duration_ms`. */
+    val bufferDurationMs: Int = DEFAULT_BUFFER_DURATION_MS,
+
     val addonSubtitleStartupMode: AddonSubtitleStartupMode = AddonSubtitleStartupMode.ALL_SUBTITLES,
     val enableBufferLogs: Boolean = false,
     val resizeMode: Int = 0,
@@ -336,6 +344,21 @@ data class PlayerSettings(
         const val MAX_PARALLEL_CHUNK_SIZE_KB = 128 * 1024
         const val DEFAULT_ENABLE_HTTP2 = false
         const val DEFAULT_NUVIO_PERFORMANCE_MODE_ENABLED = false
+
+        // Advanced Player Settings defaults
+        /** 0 = disabled. Available options: 0, 10, 50, 100, 200, 500 MB. */
+        const val DEFAULT_DISK_CACHE_SIZE_MB = 0
+        /** 0 = use Media3 defaults. Available options: 0, 10, 20, 50, 100, 200 MB. */
+        const val DEFAULT_BUFFER_RAM_SIZE_MB = 0
+        /** 0 = Auto (Media3 default ~50000ms). Available options: 0, 60000, 90000, 120000, 300000, 600000, 1800000 ms. */
+        const val DEFAULT_BUFFER_DURATION_MS = 0
+
+        // Disk cache size options (MB)
+        val DISK_CACHE_SIZE_OPTIONS = listOf(0, 10, 50, 100, 200, 500)
+        // RAM buffer size options (MB)
+        val BUFFER_RAM_SIZE_OPTIONS = listOf(0, 10, 20, 50, 100, 200)
+        // Buffer duration options (ms) — 0 = Auto
+        val BUFFER_DURATION_OPTIONS = listOf(0, 60_000, 90_000, 120_000, 300_000, 600_000, 1_800_000)
     }
 }
 
@@ -535,6 +558,11 @@ class PlayerSettingsDataStore @Inject constructor(
     private val parallelChunkSizeKbKey = intPreferencesKey("parallel_chunk_size_kb")
     private val enableHttp2Key = booleanPreferencesKey("enable_http2")
     private val lastPlaybackDiagnosticsKey = stringPreferencesKey("last_playback_diagnostics_json")
+
+    // Advanced Player Settings keys
+    private val diskCacheSizeMbKey = intPreferencesKey("pref_disk_cache_size")
+    private val bufferRamSizeMbKey = intPreferencesKey("pref_buffer_ram_size")
+    private val bufferDurationMsKey = intPreferencesKey("pref_buffer_duration_ms")
 
     private val addonSubtitleStartupModeKey = stringPreferencesKey("addon_subtitle_startup_mode")
     private val addonSubtitleStartupModeAutoPreferredKey =
@@ -925,6 +953,9 @@ class PlayerSettingsDataStore @Inject constructor(
                 enableBufferLogs = prefs[enableBufferLogsKey] ?: false,
                 resizeMode = (prefs[resizeModeKey] ?: 0).coerceIn(0, 4),
                 enableHttp2 = prefs[enableHttp2Key] ?: PlayerSettings.DEFAULT_ENABLE_HTTP2,
+                diskCacheSizeMb = prefs[diskCacheSizeMbKey] ?: PlayerSettings.DEFAULT_DISK_CACHE_SIZE_MB,
+                bufferRamSizeMb = prefs[bufferRamSizeMbKey] ?: PlayerSettings.DEFAULT_BUFFER_RAM_SIZE_MB,
+                bufferDurationMs = prefs[bufferDurationMsKey] ?: PlayerSettings.DEFAULT_BUFFER_DURATION_MS,
                 nuvioPerformanceModeEnabled = (prefs[nuvioPerformanceModeEnabledKey] ?: PlayerSettings.DEFAULT_NUVIO_PERFORMANCE_MODE_ENABLED) &&
                         android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O,
                 subtitleStyle = SubtitleStyleSettings(
@@ -1506,6 +1537,27 @@ class PlayerSettingsDataStore @Inject constructor(
 
     suspend fun setEnableHttp2(enabled: Boolean) {
         store().edit { it[enableHttp2Key] = enabled }
+    }
+
+    // Advanced Player Settings setters
+    suspend fun setDiskCacheSizeMb(mb: Int) {
+        store().edit { it[diskCacheSizeMbKey] = mb }
+    }
+
+    suspend fun setBufferRamSizeMb(mb: Int) {
+        store().edit { it[bufferRamSizeMbKey] = mb }
+    }
+
+    suspend fun setBufferDurationMs(ms: Int) {
+        store().edit { it[bufferDurationMsKey] = ms }
+    }
+
+    suspend fun resetAdvancedPlayerSettings() {
+        store().edit { prefs ->
+            prefs[diskCacheSizeMbKey] = PlayerSettings.DEFAULT_DISK_CACHE_SIZE_MB
+            prefs[bufferRamSizeMbKey] = PlayerSettings.DEFAULT_BUFFER_RAM_SIZE_MB
+            prefs[bufferDurationMsKey] = PlayerSettings.DEFAULT_BUFFER_DURATION_MS
+        }
     }
 
     suspend fun setVodCacheEnabled(enabled: Boolean) { store().edit { it[vodCacheEnabledKey] = enabled } }

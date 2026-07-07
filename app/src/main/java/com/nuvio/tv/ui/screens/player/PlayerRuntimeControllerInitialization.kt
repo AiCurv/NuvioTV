@@ -529,6 +529,12 @@ internal fun PlayerRuntimeController.initializePlayer(
                 mediaSourceFactory.vodCacheEnabled = false
             }
 
+            // Advanced Player Settings (CloudStream-style caching & buffering)
+            // These apply regardless of the buffer engine toggle – they are
+            // independent knobs that override the relevant LoadControl / cache
+            // parameters when set to a non-default value.
+            mediaSourceFactory.diskCacheSizeMb = playerSettings.diskCacheSizeMb
+
             if (playerSettings.parallelNetworkEnabled) {
                 mediaSourceFactory.useParallelConnections = playerSettings.useParallelConnections
                 mediaSourceFactory.parallelConnectionCount = playerSettings.parallelConnectionCount

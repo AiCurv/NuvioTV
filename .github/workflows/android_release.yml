@@ -1,0 +1,132 @@
+name: Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_variant:
+        description: "Build variant: full or playstore"
+        required: true
+        default: full
+        type: choice
+        options:
+          - full
+          - playstore
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Prepare local properties
+        env:
+          LOCAL_PROPERTIES_BASE64: ${{ secrets.LOCAL_PROPERTIES_BASE64 }}
+          LOCAL_DEV_PROPERTIES_BASE64: ${{ secrets.LOCAL_DEV_PROPERTIES_BASE64 }}
+        run: |
+          if [ -n "$LOCAL_PROPERTIES_BASE64" ]; then
+            printf '%s' "$LOCAL_PROPERTIES_BASE64" | base64 --decode > local.properties
+          fi
+          if [ -n "$LOCAL_DEV_PROPERTIES_BASE64" ]; then
+            printf '%s' "$LOCAL_DEV_PROPERTIES_BASE64" | base64 --decode > local.dev.properties
+          fi
+
+      - name: Decode Keystore from Secrets
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.NUVIO_RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_KEY_ALIAS: ${{ secrets.NUVIO_RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.NUVIO_RELEASE_KEY_PASSWORD }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.NUVIO_RELEASE_STORE_PASSWORD }}
+        run: |
+          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/nuviotv.jks"
+            {
+              echo "NUVIO_RELEASE_STORE_FILE=$RUNNER_TEMP/nuviotv.jks"
+              echo "NUVIO_RELEASE_KEY_ALIAS=$RELEASE_KEY_ALIAS"
+              echo "NUVIO_RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD"
+              echo "NUVIO_RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD"
+            } >> "$GITHUB_ENV"
+          else
+            echo "CI_USE_DEBUG_SIGNING=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Release APK
+        run: |
+          VARIANT="${{ inputs.build_variant }}"
+          if [ "$VARIANT" = "playstore" ]; then
+            ./gradlew assemblePlaystoreRelease
+          else
+            ./gradlew assembleFullRelease
+          fi
+
+      - name: Sign APK (if debug signing fallback)
+        if: env.CI_USE_DEBUG_SIGNING == 'true'
+        env:
+          BUILD_TOOLS_VERSION: "34.0.0"
+        run: |
+          # Find the built APK
+          VARIANT="${{ inputs.build_variant }}"
+          if [ "$VARIANT" = "playstore" ]; then
+            APK_PATH="app/build/outputs/apk/playstore/release/app-playstore-release-unsigned.apk"
+          else
+            APK_PATH="app/build/outputs/apk/full/release/app-full-release-unsigned.apk"
+          fi
+
+          if [ ! -f "$APK_PATH" ]; then
+            # Try to find any release APK
+            APK_PATH=$(find app/build/outputs/apk -name "*release*.apk" -type f | head -n 1)
+          fi
+
+          if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
+            SIGNED_APK="${APK_PATH/-unsigned/-signed}"
+            # Use apksigner from Android Build Tools
+            BUILD_TOOLS="$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION"
+            if [ -d "$BUILD_TOOLS" ]; then
+              # Generate a debug keystore for signing
+              keytool -genkeypair -v -keystore "$RUNNER_TEMP/debug-sign.jks" \
+                -alias debug -keyalg RSA -keysize 2048 -validity 10000 \
+                -storepass android -keypass android \
+                -dname "CN=Debug,O=Debug,C=US"
+              "$BUILD_TOOLS/apksigner" sign \
+                --ks "$RUNNER_TEMP/debug-sign.jks" \
+                --ks-pass pass:android \
+                --key-pass pass:android \
+                --out "$SIGNED_APK" \
+                "$APK_PATH"
+              echo "APK signed with debug key: $SIGNED_APK"
+            else
+              echo "Build tools not found, copying unsigned APK"
+              cp "$APK_PATH" "${APK_PATH/-unsigned/}"
+            fi
+          else
+            echo "No release APK found to sign"
+          fi
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NuvioTV-Modded-Release
+          path: |
+            app/build/outputs/apk/**/*release*.apk
+          retention-days: 30

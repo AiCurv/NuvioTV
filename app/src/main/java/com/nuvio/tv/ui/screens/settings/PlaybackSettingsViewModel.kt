@@ -39,7 +39,8 @@ class PlaybackSettingsViewModel @Inject constructor(
     private val trailerSettingsDataStore: TrailerSettingsDataStore,
     private val addonRepository: AddonRepository,
     private val pluginManager: PluginManager,
-    private val torrentSettings: TorrentSettings
+    private val torrentSettings: TorrentSettings,
+    private val cacheClearUtility: com.nuvio.tv.core.player.CacheClearUtility
 ) : ViewModel() {
 
     val playerSettings: Flow<PlayerSettings> = playerSettingsDataStore.playerSettings
@@ -515,5 +516,22 @@ class PlaybackSettingsViewModel @Inject constructor(
 
     suspend fun setNuvioPerformanceModeEnabled(enabled: Boolean) {
         playerSettingsDataStore.setNuvioPerformanceModeEnabled(enabled)
+    }
+
+    // Advanced Player Settings
+    suspend fun setDiskCacheSizeMb(mb: Int) {
+        playerSettingsDataStore.setDiskCacheSizeMb(mb)
+    }
+
+    suspend fun setBufferRamSizeMb(mb: Int) {
+        playerSettingsDataStore.setBufferRamSizeMb(mb)
+    }
+
+    suspend fun setBufferDurationMs(ms: Int) {
+        playerSettingsDataStore.setBufferDurationMs(ms)
+    }
+
+    suspend fun clearCache() {
+        cacheClearUtility.clearAllCache()
     }
 }

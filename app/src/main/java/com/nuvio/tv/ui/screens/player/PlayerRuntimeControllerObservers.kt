@@ -368,6 +368,9 @@ internal fun PlayerRuntimeController.observeSubtitleSettings() {
                 mediaSourceFactory.vodCacheSizeMb = settings.vodCacheSizeMb
             }
 
+            // Advanced Player Settings — always propagate (independent of buffer engine toggle)
+            mediaSourceFactory.diskCacheSizeMb = settings.diskCacheSizeMb
+
             val previousMpvHardwareDecodeMode = mpvHardwareDecodeModeSetting
             mpvHardwareDecodeModeSetting = settings.mpvHardwareDecodeMode
             if (isUsingMpvEngine() && previousMpvHardwareDecodeMode != mpvHardwareDecodeModeSetting) {

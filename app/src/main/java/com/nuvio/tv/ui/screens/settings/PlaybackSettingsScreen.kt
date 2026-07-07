@@ -396,6 +396,19 @@ fun PlaybackSettingsContent(
                 onSetEnableHttp2 = { enabled ->
                     coroutineScope.launch { viewModel.setEnableHttp2(enabled) }
                     memoryUsageTrigger++
+                },
+                // Advanced Player Settings callbacks
+                onSetDiskCacheSizeMb = { mb ->
+                    coroutineScope.launch { viewModel.setDiskCacheSizeMb(mb) }
+                },
+                onSetBufferRamSizeMb = { mb ->
+                    coroutineScope.launch { viewModel.setBufferRamSizeMb(mb) }
+                },
+                onSetBufferDurationMs = { ms ->
+                    coroutineScope.launch { viewModel.setBufferDurationMs(ms) }
+                },
+                onClearCache = {
+                    coroutineScope.launch { viewModel.clearCache() }
                 }
             )
         }
